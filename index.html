@@ -79,6 +79,7 @@
             width: 90%;
             max-width: 300px;
             transition: transform 0.3s;
+            margin: 5px;
         }
 
         .btn:hover {
@@ -135,6 +136,22 @@
             font-weight: bold;
         }
 
+        .error-message {
+            color: #ff6b6b;
+            padding: 10px;
+            margin: 10px 0;
+            background: rgba(255, 0, 0, 0.1);
+            border-radius: 5px;
+        }
+
+        .success-message {
+            color: #51cf66;
+            padding: 10px;
+            margin: 10px 0;
+            background: rgba(0, 255, 0, 0.1);
+            border-radius: 5px;
+        }
+
         @media (max-width: 768px) {
             .logo {
                 width: 120px;
@@ -167,18 +184,18 @@
 
         <div id="parent" class="section">
             <h2>استعلام ولي الأمر</h2>
-            <input id="searchName" placeholder="اسم الطالب">
-            <input id="searchClass" placeholder="الصف">
+            <input id="searchName" placeholder="اسم الطالب (مطلوب)">
+            <input id="searchClass" placeholder="الصف (اختياري)">
             <button class="btn" onclick="searchStudent()">🔍 بحث</button>
             <div id="result"></div>
         </div>
 
         <div id="teacher" class="section">
             <h2>إدخال بيانات الطالب</h2>
-            <input id="name" placeholder="اسم الطالب">
-            <input id="class" placeholder="الصف">
+            <input id="name" placeholder="اسم الطالب *">
+            <input id="class" placeholder="الصف *">
             <input id="group" placeholder="الشعبة">
-            <input id="subject" placeholder="المادة">
+            <input id="subject" placeholder="المادة *">
             <input id="absence" placeholder="غياب">
             <input id="delay" placeholder="تأخر">
             <input id="homework" placeholder="وظائف">
@@ -222,17 +239,23 @@
 
         function saveData() {
             const data = {
-                name: document.getElementById('name').value,
-                class: document.getElementById('class').value,
-                group: document.getElementById('group').value,
-                subject: document.getElementById('subject').value,
-                absence: document.getElementById('absence').value,
-                delay: document.getElementById('delay').value,
-                homework: document.getElementById('homework').value,
-                quiz: document.getElementById('quiz').value,
-                exam: document.getElementById('exam').value,
-                date: document.getElementById('date').value
+                name: document.getElementById('name').value.trim(),
+                class: document.getElementById('class').value.trim(),
+                group: document.getElementById('group').value.trim(),
+                subject: document.getElementById('subject').value.trim(),
+                absence: document.getElementById('absence').value.trim(),
+                delay: document.getElementById('delay').value.trim(),
+                homework: document.getElementById('homework').value.trim(),
+                quiz: document.getElementById('quiz').value.trim(),
+                exam: document.getElementById('exam').value.trim(),
+                date: document.getElementById('date').value.trim() || new Date().toLocaleDateString('ar-EG')
             };
+
+            // التحقق من الحقول المطلوبة
+            if (!data.name || !data.class || !data.subject) {
+                alert('⚠️ يرجى ملء الحقول المطلوبة (الاسم، الصف، المادة)');
+                return;
+            }
 
             fetch(apiURL, {
                 method: 'POST',
@@ -241,70 +264,171 @@
                 },
                 body: JSON.stringify({ data: data })
             })
-            .then(response => response.json())
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Network response was not ok');
+                }
+                return response.json();
+            })
             .then(data => {
-                alert('تم حفظ البيانات بنجاح');
+                alert('✅ تم حفظ البيانات بنجاح');
+                // مسح الحقول بعد الحفظ
                 document.querySelectorAll('#teacher input').forEach(input => input.value = '');
             })
             .catch(error => {
-                alert('حدث خطأ في الحفظ');
+                console.error('Error:', error);
+                alert('❌ حدث خطأ في حفظ البيانات');
             });
         }
 
         function searchStudent() {
-            const name = document.getElementById('searchName').value;
-            const className = document.getElementById('searchClass').value;
+            const name = document.getElementById('searchName').value.trim();
+            const className = document.getElementById('searchClass').value.trim();
+
+            // التحقق من إدخال اسم الطالب
+            if (!name) {
+                document.getElementById('result').innerHTML = 
+                    '<div class="error-message">⚠️ يرجى إدخال اسم الطالب للبحث</div>';
+                return;
+            }
+
+            document.getElementById('result').innerHTML = '<p>جاري البحث...</p>';
 
             fetch(apiURL)
-                .then(response => response.json())
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Network response was not ok');
+                    }
+                    return response.json();
+                })
                 .then(data => {
-                    const results = data.filter(student => 
-                        student.name.includes(name) && student.class.includes(className)
-                    );
+                    console.log('Data received:', data); // للتصحيح
                     
-                    let html = '<table><tr><th>الاسم</th><th>الصف</th><th>المادة</th><th>الغياب</th><th>التأخر</th><th>الوظائف</th></tr>';
-                    results.forEach(student => {
-                        html += `<tr>
-                            <td>${student.name}</td>
-                            <td>${student.class}</td>
-                            <td>${student.subject}</td>
-                            <td>${student.absence}</td>
-                            <td>${student.delay}</td>
-                            <td>${student.homework}</td>
-                        </tr>`;
+                    // البحث في البيانات
+                    const results = data.filter(student => {
+                        const nameMatch = student.name && student.name.includes(name);
+                        const classMatch = !className || (student.class && student.class.includes(className));
+                        return nameMatch && classMatch;
                     });
-                    html += '</table>';
                     
+                    console.log('Search results:', results); // للتصحيح
+                    
+                    if (results.length === 0) {
+                        document.getElementById('result').innerHTML = 
+                            '<div class="error-message">❌ لا توجد نتائج تطابق معايير البحث</div>';
+                        return;
+                    }
+                    
+                    // عرض النتائج في جدول
+                    let html = `
+                        <div class="success-message">
+                            ✅ تم العثور على ${results.length} نتيجة
+                        </div>
+                        <table>
+                            <tr>
+                                <th>الاسم</th>
+                                <th>الصف</th>
+                                <th>الشعبة</th>
+                                <th>المادة</th>
+                                <th>الغياب</th>
+                                <th>التأخر</th>
+                                <th>الوظائف</th>
+                                <th>المذاكرة</th>
+                                <th>الامتحان</th>
+                                <th>التاريخ</th>
+                            </tr>
+                    `;
+                    
+                    results.forEach(student => {
+                        html += `
+                            <tr>
+                                <td>${student.name || '-'}</td>
+                                <td>${student.class || '-'}</td>
+                                <td>${student.group || '-'}</td>
+                                <td>${student.subject || '-'}</td>
+                                <td>${student.absence || '-'}</td>
+                                <td>${student.delay || '-'}</td>
+                                <td>${student.homework || '-'}</td>
+                                <td>${student.quiz || '-'}</td>
+                                <td>${student.exam || '-'}</td>
+                                <td>${student.date || '-'}</td>
+                            </tr>
+                        `;
+                    });
+                    
+                    html += '</table>';
                     document.getElementById('result').innerHTML = html;
                 })
                 .catch(error => {
-                    document.getElementById('result').innerHTML = '<p>حدث خطأ في البحث</p>';
+                    console.error('Error:', error);
+                    document.getElementById('result').innerHTML = 
+                        '<div class="error-message">❌ حدث خطأ في جلب البيانات. يرجى المحاولة مرة أخرى</div>';
                 });
         }
 
         function loadData() {
             fetch(apiURL)
-                .then(response => response.json())
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Network response was not ok');
+                    }
+                    return response.json();
+                })
                 .then(data => {
-                    let html = '<table><tr><th>الاسم</th><th>الصف</th><th>الشعبة</th><th>المادة</th><th>الغياب</th><th>التأخر</th></tr>';
-                    data.forEach(student => {
-                        html += `<tr>
-                            <td>${student.name}</td>
-                            <td>${student.class}</td>
-                            <td>${student.group}</td>
-                            <td>${student.subject}</td>
-                            <td>${student.absence}</td>
-                            <td>${student.delay}</td>
-                        </tr>`;
-                    });
-                    html += '</table>';
+                    if (data.length === 0) {
+                        document.getElementById('adminData').innerHTML = 
+                            '<div class="error-message">لا توجد بيانات في النظام</div>';
+                        return;
+                    }
                     
+                    let html = `
+                        <div class="success-message">
+                            📊 إجمالي السجلات: ${data.length}
+                        </div>
+                        <table>
+                            <tr>
+                                <th>الاسم</th>
+                                <th>الصف</th>
+                                <th>الشعبة</th>
+                                <th>المادة</th>
+                                <th>الغياب</th>
+                                <th>التأخر</th>
+                                <th>الوظائف</th>
+                                <th>المذاكرة</th>
+                                <th>الامتحان</th>
+                                <th>التاريخ</th>
+                            </tr>
+                    `;
+                    
+                    data.forEach(student => {
+                        html += `
+                            <tr>
+                                <td>${student.name || '-'}</td>
+                                <td>${student.class || '-'}</td>
+                                <td>${student.group || '-'}</td>
+                                <td>${student.subject || '-'}</td>
+                                <td>${student.absence || '-'}</td>
+                                <td>${student.delay || '-'}</td>
+                                <td>${student.homework || '-'}</td>
+                                <td>${student.quiz || '-'}</td>
+                                <td>${student.exam || '-'}</td>
+                                <td>${student.date || '-'}</td>
+                            </tr>
+                        `;
+                    });
+                    
+                    html += '</table>';
                     document.getElementById('adminData').innerHTML = html;
                 })
                 .catch(error => {
-                    document.getElementById('adminData').innerHTML = '<p>حدث خطأ في تحميل البيانات</p>';
+                    console.error('Error:', error);
+                    document.getElementById('adminData').innerHTML = 
+                        '<div class="error-message">❌ حدث خطأ في تحميل البيانات</div>';
                 });
         }
+
+        // إضافة تاريخ تلقائي عند فتح صفحة المعلم
+        document.getElementById('date').value = new Date().toLocaleDateString('ar-EG');
     </script>
 </body>
 </html>
