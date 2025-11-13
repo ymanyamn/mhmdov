@@ -239,7 +239,10 @@
     </div>
 
     <script>
-        const apiURL = "https://sheetdb.io/api/v1/6534bwnl5o7sl";
+        // قاعدة بيانات محلية كبديل
+        let localDatabase = JSON.parse(localStorage.getItem('schoolData')) || [];
+        let useLocalDB = true; // استخدام قاعدة البيانات المحلية
+
         const passwords = { teacher: "1990", admin: "1992" };
 
         function showSection(sectionId) {
@@ -259,11 +262,12 @@
             }
         }
 
-        async function saveData() {
+        function saveData() {
             const saveBtn = document.getElementById('saveBtn');
             const saveResult = document.getElementById('saveResult');
             
             const data = {
+                id: Date.now().toString(), // معرف فريد
                 name: document.getElementById('name').value.trim(),
                 class: document.getElementById('class').value.trim(),
                 group: document.getElementById('group').value.trim(),
@@ -282,34 +286,16 @@
                 return;
             }
 
-            // تعطيل الزر أثناء الحفظ
             saveBtn.disabled = true;
             saveBtn.innerHTML = '⏳ جاري الحفظ...';
             saveResult.innerHTML = '<div class="loading">جاري حفظ البيانات...</div>';
 
             try {
-                // إضافة timeout لمنع التجميد
-                const timeoutPromise = new Promise((_, reject) => 
-                    setTimeout(() => reject(new Error('Timeout: took too long')), 10000)
-                );
-
-                const savePromise = fetch(apiURL, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({ data: data })
-                });
-
-                const response = await Promise.race([savePromise, timeoutPromise]);
+                // استخدام قاعدة البيانات المحلية
+                localDatabase.push(data);
+                localStorage.setItem('schoolData', JSON.stringify(localDatabase));
                 
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
-
-                const result = await response.json();
-                
-                saveResult.innerHTML = '<div class="success-message">✅ تم حفظ البيانات بنجاح</div>';
+                saveResult.innerHTML = '<div class="success-message">✅ تم حفظ البيانات بنجاح في التخزين المحلي</div>';
                 
                 // مسح الحقول بعد الحفظ الناجح
                 document.querySelectorAll('#teacher input').forEach(input => {
@@ -318,28 +304,18 @@
                 
             } catch (error) {
                 console.error('Error saving data:', error);
-                let errorMessage = '❌ حدث خطأ في حفظ البيانات';
-                
-                if (error.message.includes('Timeout')) {
-                    errorMessage = '⏰ استغرقت العملية وقتاً طويلاً. يرجى المحاولة مرة أخرى';
-                } else if (error.message.includes('Network')) {
-                    errorMessage = '🌐 مشكلة في الاتصال بالإنترنت. يرجى التحقق من الاتصال';
-                }
-                
-                saveResult.innerHTML = `<div class="error-message">${errorMessage}</div>`;
+                saveResult.innerHTML = '<div class="error-message">❌ حدث خطأ في حفظ البيانات</div>';
             } finally {
-                // إعادة تفعيل الزر
                 saveBtn.disabled = false;
                 saveBtn.innerHTML = '💾 حفظ البيانات';
                 
-                // إخفاء الرسالة بعد 5 ثواني
                 setTimeout(() => {
                     saveResult.innerHTML = '';
                 }, 5000);
             }
         }
 
-        async function searchStudent() {
+        function searchStudent() {
             const searchBtn = document.getElementById('searchBtn');
             const resultDiv = document.getElementById('result');
             const name = document.getElementById('searchName').value.trim();
@@ -355,20 +331,10 @@
             resultDiv.innerHTML = '<div class="loading">جاري البحث في البيانات...</div>';
 
             try {
-                const timeoutPromise = new Promise((_, reject) => 
-                    setTimeout(() => reject(new Error('Timeout')), 15000)
-                );
-
-                const searchPromise = fetch(apiURL);
-                const response = await Promise.race([searchPromise, timeoutPromise]);
+                // تحديث البيانات من localStorage
+                localDatabase = JSON.parse(localStorage.getItem('schoolData')) || [];
                 
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
-
-                const data = await response.json();
-                
-                const results = data.filter(student => {
+                const results = localDatabase.filter(student => {
                     const nameMatch = student.name && student.name.toLowerCase().includes(name.toLowerCase());
                     const classMatch = !className || (student.class && student.class.includes(className));
                     return nameMatch && classMatch;
@@ -420,20 +386,14 @@
                 
             } catch (error) {
                 console.error('Error searching:', error);
-                let errorMessage = '❌ حدث خطأ في البحث';
-                
-                if (error.message.includes('Timeout')) {
-                    errorMessage = '⏰ استغرقت العملية وقتاً طويلاً. يرجى المحاولة مرة أخرى';
-                }
-                
-                resultDiv.innerHTML = `<div class="error-message">${errorMessage}</div>`;
+                resultDiv.innerHTML = '<div class="error-message">❌ حدث خطأ في البحث</div>';
             } finally {
                 searchBtn.disabled = false;
                 searchBtn.innerHTML = '🔍 بحث';
             }
         }
 
-        async function loadData() {
+        function loadData() {
             const loadBtn = document.getElementById('loadBtn');
             const adminData = document.getElementById('adminData');
 
@@ -442,27 +402,17 @@
             adminData.innerHTML = '<div class="loading">جاري تحميل البيانات...</div>';
 
             try {
-                const timeoutPromise = new Promise((_, reject) => 
-                    setTimeout(() => reject(new Error('Timeout')), 15000)
-                );
-
-                const loadPromise = fetch(apiURL);
-                const response = await Promise.race([loadPromise, timeoutPromise]);
+                // تحديث البيانات من localStorage
+                localDatabase = JSON.parse(localStorage.getItem('schoolData')) || [];
                 
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
-
-                const data = await response.json();
-                
-                if (data.length === 0) {
+                if (localDatabase.length === 0) {
                     adminData.innerHTML = '<div class="error-message">لا توجد بيانات في النظام</div>';
                     return;
                 }
                 
                 let html = `
                     <div class="success-message">
-                        📊 إجمالي السجلات: ${data.length}
+                        📊 إجمالي السجلات: ${localDatabase.length}
                     </div>
                     <table>
                         <tr>
@@ -476,10 +426,11 @@
                             <th>المذاكرة</th>
                             <th>الامتحان</th>
                             <th>التاريخ</th>
+                            <th>حذف</th>
                         </tr>
                 `;
                 
-                data.forEach(student => {
+                localDatabase.forEach((student, index) => {
                     html += `
                         <tr>
                             <td>${student.name || '-'}</td>
@@ -492,6 +443,7 @@
                             <td>${student.quiz || '-'}</td>
                             <td>${student.exam || '-'}</td>
                             <td>${student.date || '-'}</td>
+                            <td><button onclick="deleteRecord(${index})" style="padding: 5px 10px; background: #ff4444; color: white; border: none; border-radius: 3px; cursor: pointer;">🗑️</button></td>
                         </tr>
                     `;
                 });
@@ -501,21 +453,29 @@
                 
             } catch (error) {
                 console.error('Error loading data:', error);
-                let errorMessage = '❌ حدث خطأ في تحميل البيانات';
-                
-                if (error.message.includes('Timeout')) {
-                    errorMessage = '⏰ استغرقت العملية وقتاً طويلاً. يرجى المحاولة مرة أخرى';
-                }
-                
-                adminData.innerHTML = `<div class="error-message">${errorMessage}</div>`;
+                adminData.innerHTML = '<div class="error-message">❌ حدث خطأ في تحميل البيانات</div>';
             } finally {
                 loadBtn.disabled = false;
                 loadBtn.innerHTML = '🔄 تحديث البيانات';
             }
         }
 
+        function deleteRecord(index) {
+            if (confirm('هل أنت متأكد من حذف هذا السجل؟')) {
+                localDatabase.splice(index, 1);
+                localStorage.setItem('schoolData', JSON.stringify(localDatabase));
+                loadData(); // إعادة تحميل البيانات
+                alert('✅ تم حذف السجل بنجاح');
+            }
+        }
+
         // إضافة تاريخ تلقائي
         document.getElementById('date').value = new Date().toLocaleDateString('ar-EG');
+
+        // تهيئة التخزين المحلي
+        if (!localStorage.getItem('schoolData')) {
+            localStorage.setItem('schoolData', JSON.stringify([]));
+        }
     </script>
 </body>
 </html>
